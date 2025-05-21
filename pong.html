@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EMUGAN P5.js Pong Simulation</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.4.0/lib/p5.js"></script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #1a1a1a;
+            color: #eee;
+            font-family: 'Consolas', monospace;
+            text-align: center;
+        }
+        canvas {
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.7);
+            margin-top: 20px;
+            background-color: #000;
+        }
+        .info-box {
+            background-color: #2a2a2a;
+            border: 1px solid #444;
+            padding: 20px;
+            margin-top: 30px;
+            max-width: 700px;
+            text-align: left;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+        }
+        h1 {
+            color: #00ffff;
+            text-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
+        }
+        p {
+            line-height: 1.6;
+            color: #ccc;
+        }
+        .key-info {
+            font-size: 0.9em;
+            color: #999;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>P5.js Pong Game</h1>
+    <p>This P5.js implementation of Pong is inspired by the mechanics of the Python Pygame example. </p>
+    <p>It demonstrates a game environment within which EMUGAN could operate.</p>
+    <div id="p5-canvas-container"></div>
+    <div class="key-info">
+        <p>Player 1 (Left): 'W' (Up), 'S' (Down)</p>
+        <p>Player 2 (Right): 'ARROW_UP' (Up), 'ARROW_DOWN' (Down)</p>
+    </div>
+
+    <div class="info-box">
+        <h2>EMUGAN Integration Concept:</h2>
+        <p>EMUGAN operates by observing game states and agent interactions to generate realistic "next frames." [1] It excels at replicating dynamic environments once trained on datasets of image-action sequences. [1]</p>
+        <p>In the context of this Pong game, EMUGAN would not generate the core game logic (like paddle movement rules, ball physics, or collision detection). Instead, it could be used for:</p>
+        <ul>
+            <li><strong>Predicting Opponent Behavior:</strong> If trained on opponent gameplay data, EMUGAN might predict the next paddle position of an AI opponent, allowing for a more sophisticated AI.</li>
+            <li><strong>Generating Visual Effects:</strong> Instead of manually coding explosion effects or advanced visual feedback, EMUGAN could generate these dynamic visual elements based on in-game events (e.g., a "hit" animation when the ball strikes a paddle).</li>
+            <li><strong>Environment Augmentation:</strong> EMUGAN could dynamically generate background elements or visual distortions to make the game environment more complex or visually interesting over time, based on game state (e.g., increasing ball speed).</li>
+            <li><strong>"What If" Scenarios:</strong> In a sandbox mode, an external system could feed current game frames and hypothetical actions to EMUGAN, and it would return a predicted "future frame" for analysis, without actually advancing the live game state. [1]</li>
+        </ul>
+        <p>For this P5.js example, a direct, real-time integration would involve making API calls from the browser's JavaScript to a backend service running EMUGAN within Google Gemini Functions, which would then return generated image or data for P5.js to render. [1]</p>
+    </div>
+
+    <script>
+        let ball;
+        let paddle1, paddle2;
+        let score1 = 0;
+        let score2 = 0;
+        const PADDLE_WIDTH = 8;
+        const PADDLE_HEIGHT = 80;
+        const BALL_RADIUS = 10; // Half of the Python game's 20, as p5 circles use radius
+        const PADDLE_SPEED = 6;
+        const BALL_INITIAL_SPEED = 4;
+
+        function setup() {
+            let canvas = createCanvas(600, 400);
+            canvas.parent('p5-canvas-container');
+            ball = new Ball();
+            paddle1 = new Paddle(true); // Left paddle
+            paddle2 = new Paddle(false); // Right paddle
+            textSize(32);
+            textAlign(CENTER, TOP);
+            noStroke();
+            resetGame();
+        }
+
+        function draw() {
+            background(0); // Black background
+            drawCourt();
+
+            ball.update();
+            ball.edges();
+            ball.checkPaddle(paddle1);
+            ball.checkPaddle(paddle2);
+            ball.show();
+
+            paddle1.update();
+            paddle1.show();
+            paddle2.update();
+            paddle2.show();
+
+            displayScores();
+
+            // --- EMUGAN Conceptual Integration Point ---
+            // If EMUGAN were integrated, this is where you might send the current frame
+            // or game state to EMUGAN's API and receive a "next frame" or AI action.
+            // For example, to generate a visual overlay, or an AI paddle's move:
+            //
+            // const emuganOutput = callEmuganAPI(getCurrentGameState());
+            // if (emuganOutput && emuganOutput.aiPaddleMove) {
+            //     paddle2.setDirection(emuganOutput.aiPaddleMove);
+            // }
+            // if (emuganOutput && emuganOutput.visualEffect) {
+            //     // Render emuganOutput.visualEffect on top of the current frame
+            // }
+            // ------------------------------------------
+        }
+
+        function drawCourt() {
+            fill(255); // White for lines
+            // Center line
+            for (let i = 0; i < height; i += 20) {
+                rect(width / 2 - 1, i, 2, 10);
+            }
+            // Side lines (gutters in Python version, for score detection)
+            rect(PADDLE_WIDTH - 1, 0, 2, height);
+            rect(width - PADDLE_WIDTH - 1, 0, 2, height);
+        }
+
+        function displayScores() {
+            fill(255, 255, 0); // Yellow score
+            text(score1, width * 0.25, 20);
+            text(score2, width * 0.75, 20);
+        }
+
+        function resetGame() {
+            ball.reset();
+            paddle1.reset();
+            paddle2.reset();
+        }
+
+        function keyPressed() {
+            if (key === 'w' || key === 'W') {
+                paddle1.setDirection(-PADDLE_SPEED);
+            } else if (key === 's' || key === 'S') {
+                paddle1.setDirection(PADDLE_SPEED);
+            }
+
+            if (keyCode === UP_ARROW) {
+                paddle2.setDirection(-PADDLE_SPEED);
+            } else if (keyCode === DOWN_ARROW) {
+                paddle2.setDirection(PADDLE_SPEED);
+            }
+        }
+
+        function keyReleased() {
+            if (key === 'w' || key === 'W' || key === 's' || key === 'S') {
+                paddle1.setDirection(0);
+            }
+            if (keyCode === UP_ARROW || keyCode === DOWN_ARROW) {
+                paddle2.setDirection(0);
+            }
+        }
+
+        // Ball Class
+        class Ball {
+            constructor() {
+                this.x = width / 2;
+                this.y = height / 2;
+                this.r = BALL_RADIUS;
+                this.vel = createVector(0, 0);
+                this.speed = BALL_INITIAL_SPEED;
+                this.reset();
+            }
+
+            reset(right = random() < 0.5) {
+                this.x = width / 2;
+                this.y = height / 2;
+                let angle = random(PI / 4, 3 * PI / 4); // Angle for up-left or up-right
+                if (right) { // If true, ball goes right
+                    angle = random(-PI / 4, PI / 4);
+                } else { // If false, ball goes left
+                    angle = random(3 * PI / 4, 5 * PI / 4);
+                }
+                this.vel = p5.Vector.fromAngle(angle);
+                this.vel.setMag(this.speed);
+            }
+
+            update() {
+                this.x += this.vel.x;
+                this.y += this.vel.y;
+            }
+
+            edges() {
+                if (this.y - this.r < 0 || this.y + this.r > height) {
+                    this.vel.y *= -1;
+                }
+
+                // Scoring
+                if (this.x - this.r > width) { // Ball went past right paddle
+                    score1++;
+                    this.reset(false); // Serve to left
+                } else if (this.x + this.r < 0) { // Ball went past left paddle
+                    score2++;
+                    this.reset(true); // Serve to right
+                }
+            }
+
+            checkPaddle(paddle) {
+                // Check if ball is between paddle's top and bottom y
+                if (this.y + this.r > paddle.y - PADDLE_HEIGHT / 2 &&
+                    this.y - this.r < paddle.y + PADDLE_HEIGHT / 2) {
+
+                    // Check if ball is hitting paddle X position
+                    if (paddle.isLeft) { // Left paddle
+                        if (this.x - this.r <= paddle.x + PADDLE_WIDTH / 2 && this.x - this.r > paddle.x) {
+                            this.vel.x *= -1;
+                            this.vel.mult(1.1); // Increase speed on hit
+                        }
+                    } else { // Right paddle
+                        if (this.x + this.r >= paddle.x - PADDLE_WIDTH / 2 && this.x + this.r < paddle.x) {
+                            this.vel.x *= -1;
+                            this.vel.mult(1.1); // Increase speed on hit
+                        }
+                    }
+                }
+            }
+
+            show() {
+                fill(255, 0, 0); // Red ball
+                ellipse(this.x, this.y, this.r * 2);
+            }
+        }
+
+        // Paddle Class
+        class Paddle {
+            constructor(isLeft) {
+                this.isLeft = isLeft;
+                this.x = isLeft ? PADDLE_WIDTH : width - PADDLE_WIDTH;
+                this.y = height / 2;
+                this.h = PADDLE_HEIGHT;
+                this.w = PADDLE_WIDTH;
+                this.vel = 0;
+            }
+
+            reset() {
+                this.y = height / 2;
+                this.vel = 0;
+            }
+
+            setDirection(dir) {
+                this.vel = dir;
+            }
+
+            update() {
+                this.y += this.vel;
+                this.y = constrain(this.y, this.h / 2, height - this.h / 2); // Keep paddle on screen
+            }
+
+            show() {
+                fill(0, 255, 0); // Green paddles
+                rectMode(CENTER);
+                rect(this.x, this.y, this.w, this.h);
+            }
+        }
+    </script>
+</body>
+</html>
